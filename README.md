@@ -49,5 +49,5 @@ Author
 [CirculartextApps]
 
 License
-This project is licensed GNU Affero General Public License Version 3
+This project is licensed CC BY-NC-ND
 
