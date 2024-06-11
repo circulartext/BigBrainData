@@ -9,9 +9,9 @@ def extract_first_and_exponent(value):
     mantissa = parts[0]
     exponent = 'e+' + parts[1]
     if mantissa[0] == '-':
-        first_digits = '-' + mantissa[1:5]  # Changed to [1:6] to include 5 characters
+        first_digits = '-' + mantissa[1:4]
     else:
-        first_digits = mantissa[:5]  # Changed to [:6] to include 5 characters
+        first_digits = mantissa[:3]
     return first_digits, exponent
 
 def euclidean_distance(pair1, pair2):
@@ -21,10 +21,11 @@ def euclidean_distance(pair1, pair2):
     exponent_diff = float(exponent1[2:]) - float(exponent2[2:])
     return math.sqrt(mantissa_diff ** 2 + exponent_diff ** 2)
 
-def find_matching_pairs_with_times(csv_file, output_file_template, threshold=1000):
+def find_matching_pairs_with_times(csv_file, output_file1, output_file2, threshold=1000):
     pairs = []
     times = []
     occurrences = {}
+    matched_indices = set()
 
     with open(csv_file, 'r') as file:
         reader = csv.DictReader(file)
@@ -36,49 +37,65 @@ def find_matching_pairs_with_times(csv_file, output_file_template, threshold=100
                 pairs.append((first_digits, exponent))
                 times.append(time)
 
-    window_sizes = [4, 5, 6, 7, 8, 9, 10]
-    min_diff_digits = [1, 2, 3, 4, 5, 6, 7]
-
-    for i, (window_size, min_digits) in enumerate(zip(window_sizes, min_diff_digits)):
-        occurrences.clear()
-
-        for j in range(len(pairs) - window_size + 1):
-            window = pairs[j:j + window_size]
-            if len(set(x[0] for x in window)) >= min_digits:
+    for i in range(len(pairs) - 5):
+        if i not in matched_indices:
+            window = pairs[i:i + 6]
+            if len(set(x[0] for x in window)) >= 4:
                 pattern = tuple(window)
-                occurrences.setdefault(pattern, []).append(times[j])
+                occurrences.setdefault(pattern, []).append(times[i])
+                matched_indices.update(range(i, i + 4))
 
-        sorted_occurrences = {k: v for k, v in sorted(occurrences.items(), key=lambda item: len(item[1]), reverse=True)}
+    sorted_occurrences = {k: v for k, v in sorted(occurrences.items(), key=lambda item: len(item[1]), reverse=True)}
 
-        output_file = output_file_template.format(i)
+    with open(output_file1, 'w', newline='') as outfile1:
+        writer1 = csv.writer(outfile1)
+        for match, start_times in sorted_occurrences.items():
+            if len(start_times) > 1:
+                matching_pairs = ', '.join(str(p) for p in match)
+                rounded_start_times = [int(float(time)) for time in start_times]
+                writer1.writerow(["Matching Pairs:", matching_pairs])
+                writer1.writerow(["Occurrences:", len(start_times)])
+                writer1.writerow(["Start Times:", ', '.join(map(str, rounded_start_times))])
+                writer1.writerow([])
 
-        with open(output_file, 'w', newline='') as outfile:
-            writer = csv.writer(outfile)
-            for match, start_times in sorted_occurrences.items():
-                if len(start_times) > 1:
-                    matching_pairs = ', '.join(str(p) for p in match)
-                    rounded_start_times = [int(float(time)) for time in start_times]
-                    writer.writerow(["Matching Pairs:", matching_pairs])
-                    writer.writerow(["Occurrences:", len(start_times)])
-                    writer.writerow(["Start Times:", ', '.join(map(str, rounded_start_times))])
-                    writer.writerow([])
+            # Associate single occurrences with closest match
+            elif len(start_times) == 1:
+                min_distance = float('inf')
+                closest_matches = []
+                for other_match, other_times in sorted_occurrences.items():
+                    if len(other_times) > 1:
+                        distance = min(euclidean_distance(match[0], other_pair) for other_pair in other_match)
+                        if distance < min_distance:
+                            min_distance = distance
+                            closest_matches = [(other_match, other_times)]
+                        elif distance == min_distance:
+                            closest_matches.append((other_match, other_times))
+                if min_distance < threshold:
+                    for closest_match, closest_times in closest_matches:
+                        occurrences[closest_match] = closest_times + start_times
 
-                elif len(start_times) == 1:
-                    min_distance = float('inf')
-                    closest_match = None
-                    for other_match, other_times in occurrences.items():
-                        if len(other_times) > 1:
-                            distance = min(euclidean_distance(match[0], other_pair) for other_pair in other_match)
-                            if distance < min_distance:
-                                min_distance = distance
-                                closest_match = other_match
-                    if min_distance < threshold and closest_match is not None:
-                        occurrences[closest_match].extend(start_times)
+    sorted_occurrences = {k: v for k, v in sorted(occurrences.items(), key=lambda item: len(item[1]), reverse=True)}
 
-        print(f"Matching pairs with times written to output file: {output_file}")
+    for match, start_times in sorted_occurrences.items():
+        matching_pairs = ', '.join(str(p) for p in match)
+        rounded_start_times = [int(float(time)) for time in start_times]
+        writer1.writerow(["Matching Pairs:", matching_pairs])
+        writer1.writerow(["Occurrences:", len(start_times)])
+        writer1.writerow(["Start Times:", ', '.join(map(str, rounded_start_times))])
+        writer1.writerow([])
+
+    print("Matching pairs with times written to output file:", output_file1)
+
+    with open(output_file2, 'w', newline='') as outfile2:
+        writer2 = csv.writer(outfile2)
+        writer2.writerow(['Matching Pairs', 'Occurrences'])
+        for match, count in sorted_occurrences.items():
+            matching_pairs = ', '.join(str(p) for p in match)
+            writer2.writerow([matching_pairs, len(count)])
+    print("Matching pairs with occurrence count written to output file:", output_file2)
 
 # Example usage:
 input_csv = 'y9_10_2three.csv'  # Replace with the path to your input CSV file
-output_csv_template = '9_10_2threeFeat{}.csv'  # Specify the template for the output CSV files
-
-find_matching_pairs_with_times(input_csv, output_csv_template)
+output_csv1 = 'y9_10_2threeFeat.csv'  # Specify the path for the output CSV file with times
+output_csv2 = 'y9_10_2threeFeat.csv'  # Specify the path for the output CSV file with occurrence count
+find_matching_pairs_with_times(input_csv, output_csv1, output_csv2)
