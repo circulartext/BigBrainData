@@ -40,7 +40,7 @@ This project involves analyzing and visualizing electrooculography (EOG) data ob
 - Required Python packages: `numpy`, `mne`, `pandas`, `matplotlib`
 
 ## Author
-[Your Name]
+[Circulartextapps Group
 
 ## License
 This project is licensed under the MIT License.
